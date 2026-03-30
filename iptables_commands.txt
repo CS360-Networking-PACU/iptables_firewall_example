@@ -3,51 +3,13 @@
 # Setup port forwarding in VB to forward host 36022 to guest 22
 # Setup port forwarding in VB to forward host 36080 to guest 80
 
+## find IP address in each VM
+ip addr
 
-# find ip address in VM
-ip addr # (10.0.2.15)
+## make sure sshd is installed in each VM and
+## you can ssh from each VM to the other
 
-
-# In Windows start the terminal:
-# Windows: CMD
-# to find Windows's IP address
-ipconfig
-
-# In Windows
-
-ssh punetid@localhost -p 36022
-
-# How does this work?
-# open wireshark in VM, tcp.port==22
-# look at src and dest addr
-
-
- 
-
-# Let's setup the webserver
-
-cd /srv/www/htdocs
-
-sudo bash
-
-wget zeus.cs.pacificu.edu/chadd/cs360f21/firewall.html -O index.html
-
-systemctl start apache2
-systemctl stop firewalld
-
-# In Windows:
-# firefox
-# http://localhost:36080
-
-
-
-
-# Let's test ssh!
-# In the VM
-ssh punetid@10.2.160.6  # gray
-
-ssh punetid@64.59.225.81 # zeus
-
+ssh account@otherIPAddress
 
 
 # Let's see what iptable rules are already in place
@@ -66,28 +28,38 @@ iptables -A OUTPUT -p tcp --dport 22 -j DROP
 
 
 # Let's see if that worked.
-ssh punetid@10.2.160.6  # gray
+ssh account@otherIPAddress  # gray
 ssh punetid@64.59.225.81 # zeus
 
 # delete the rule we just added
 iptables -D OUTPUT 1
 
 
-# just block access to zeus via ssh
+
+# just block access to the Other VM via ssh
+iptables -A OUTPUT -p tcp --dport 22 -d otherIPAddress -j DROP
+
+
+
+
+ssh account@otherIPAddress  # gray
+ssh punetid@64.59.225.81 # zeus
+
+
+# block access to zeus via ssh
 iptables -A OUTPUT -p tcp --dport 22 -d 64.59.225.81 -j DROP
 
-
-ssh punetid@10.2.160.6  # gray
+ssh account@otherIPAddress  # gray
 ssh punetid@64.59.225.81 # zeus
 
-
-# delete the rule we just added
+# delete the rules we just added
+iptables -D OUTPUT 1
 iptables -D OUTPUT 1
 
 
-# Let's log each new ssh connection to zeus
+# Let's log each new ssh connection to the otherVM
 
-iptables -A OUTPUT -p tcp -d 64.59.225.81  --dport 22 -j LOG --log-prefix "NEW zeus:22" --log-level 7 -m state --state NEW
+iptables -A OUTPUT -p tcp -d otherIPAddress  --dport 22 -j LOG --log-prefix "NEW otherIPAddress:22" --log-level 7 -m state --state NEW
 
 
 # read the log
@@ -96,21 +68,28 @@ journalctl -r
 # follow the journal in a new terminal
 journalctl -f
 
+ssh to otherVM, run ls, close connection
+ssh to otherVM, run ls, run ip addr, close connection
 
+# delete the rule we just added
+iptables -D OUTPUT 1
 
 # Let's log and drop a packet.
-iptables -A OUTPUT -p tcp -d 64.59.225.81 --dport 22  -j LOG --log-prefix "DROP zeus:22" --log-level 7
-iptables -A OUTPUT -p tcp -d 64.59.225.81 --dport 22  -j DROP
+# log all packets going to port 22 on otherVM
+# drop that packet
+iptables -A OUTPUT -p tcp -d otherVMIPAddr --dport 22  -j LOG --log-prefix "DROP otherVM:22" --log-level 7
+iptables -A OUTPUT -p tcp -d otherVMIPAddr --dport 22  -j DROP
+
+
+# Let's see what iptable rules are in place
+# for the filter table
+iptables -L -n -v --line-numbers
+
 
 # test
-ssh 64.59.225.81
-
-
-# Add another log rule:
-iptables -A OUTPUT -p tcp -d 64.59.233.197 --dport 22  -j LOG --log-prefix "DROPPED zeus:22" --log-level 7
-
+ssh otherVMIPAddr
 # test
-ssh 64.59.225.81
+ssh punetid@64.59.225.81 # zeus 
 
 
 # Flush all the newly added rules
@@ -124,53 +103,34 @@ telnet 127.0.0.1 8008
 
 
 # application based filtering
-iptables -A OUTPUT -p tcp --sport 80 -m cgroup ! --path system.slice/apache2.service -j LOG --log-prefix "DROP from port 80" --log-tcp-sequence --log-level 7
+iptables -A OUTPUT -p tcp --sport 22 -m cgroup ! --path system.slice/sshd.service -j LOG --log-prefix "DROP from port 22" --log-tcp-sequence --log-level 7
 
-iptables -A OUTPUT -p tcp --sport 80 -m cgroup ! --path system.slice/apache2.service -j DROP
+iptables -A OUTPUT -p tcp --sport 22 -m cgroup ! --path system.slice/sshd.service -j DROP
 
 
-# try firefox from Windows again
-# firefox
-# http://localhost:36080
-
-# turn off the web server
-systemctl stop apache2
-
-# run the echo server on port 80
-sudo ncat -l 80 --keep-open --exec "/bin/cat"
-telnet 127.0.0.1 80
-
+# test
+ssh otherVMIPAddr
+# test
+ssh punetid@64.59.225.81 # zeus 
 
 #  Flush all the newly added rules
 iptables -F OUTPUT
 
 
-# mangle the TTL
-iptables -t mangle -A OUTPUT -j TTL --ttl-set 32 -p tcp -d 64.59.225.81 --dport 22
-iptables -t mangle -A OUTPUT -p tcp -d 64.59.225.81 --dport 22  -j LOG --log-prefix "mangle TTL" --log-tcp-sequence --log-level 7
-
-
-ssh 64.59.225.81
-
-# Remove that rule (and don't ever mangle your TTL!)
-iptables -t mangle -F OUTPUT
-
-
-
-# Let's rewrite the PORT in a packet.
+# Let's rewrite the PORT in an incoming packet.
 iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 2222 -j REDIRECT --to-port 22
 
 
-# In Windows
-ssh punetid@localhost -p 2222
+# In other VM
+ssh punetid@localVM -p 2222
 
 # Let's see what is going on.
 wireshark
 
 filter: tcp.port==22 || tcp.port==2222
 
-# In the VM:
-ssh punetid@localhost -p 2222
+# In other VM
+ssh punetid@localVM -p 2222
 
 # drop that rule
 iptables -t nat -D PREROUTING 1
@@ -182,9 +142,9 @@ iptables -t nat -A OUTPUT   -p tcp --dport 2223 -j REDIRECT --to-port 22
 
 
 # In the VM:
-ssh punetid@localhost -p 2223
+ssh punetid@otherVM -p 2223
 
-ssh punetid@64.59.225.81 -p 2223
+ssh punetid@64.59.225.81 -p 2223 # zeus
 
 # Delete that rule
 iptables -t nat -D OUTPUT 1
@@ -237,4 +197,3 @@ iptables -F
 iptables -P INPUT ACCEPT
 iptables -P OUTPUT ACCEPT
 iptables -P FORWARD ACCEPT
-
