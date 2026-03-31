@@ -11,6 +11,8 @@ ip addr
 ssh account@otherIPAddress
 
 
+VM1
+
 # Let's see what iptable rules are already in place
 # for the filter table
 iptables -L -n -v --line-numbers
@@ -24,31 +26,33 @@ iptables -L -n -v --line-numbers
 # Let's drop TCP traffic leaving your VM with a destination port of 22
 iptables -A OUTPUT -p tcp --dport 22 -j DROP
 
-
+# view the rule
+iptables -L -n -v --line-numbers
 
 # Let's see if that worked.
-ssh account@otherIPAddress  # gray
+ssh account@otherIPAddress  # VM2
 ssh punetid@64.59.225.81 # zeus
+
 
 # delete the rule we just added
 iptables -D OUTPUT 1
-
 
 
 # just block access to the Other VM via ssh
 iptables -A OUTPUT -p tcp --dport 22 -d otherIPAddress -j DROP
 
 
-
-
-ssh account@otherIPAddress  # gray
+ssh account@otherIPAddress  # VM2
 ssh punetid@64.59.225.81 # zeus
 
 
 # block access to zeus via ssh
 iptables -A OUTPUT -p tcp --dport 22 -d 64.59.225.81 -j DROP
 
-ssh account@otherIPAddress  # gray
+# view the rule
+iptables -L -n -v --line-numbers
+
+ssh account@otherIPAddress  # VM2
 ssh punetid@64.59.225.81 # zeus
 
 # delete the rules we just added
@@ -57,7 +61,6 @@ iptables -D OUTPUT 1
 
 
 # Let's log each new ssh connection to the otherVM
-
 iptables -A OUTPUT -p tcp -d otherIPAddress  --dport 22 -j LOG --log-prefix "NEW otherIPAddress:22" --log-level 7 -m state --state NEW
 
 
@@ -65,7 +68,7 @@ iptables -A OUTPUT -p tcp -d otherIPAddress  --dport 22 -j LOG --log-prefix "NEW
 journalctl -r
 
 # follow the journal in a new terminal
-journalctl -f
+journalctl -f # keep this running
 
 ssh to otherVM, run ls, close connection
 ssh to otherVM, run ls, run ip addr, close connection
@@ -79,20 +82,15 @@ iptables -D OUTPUT 1
 iptables -A OUTPUT -p tcp -d otherVMIPAddr --dport 22  -j LOG --log-prefix "DROP otherVM:22" --log-level 7
 iptables -A OUTPUT -p tcp -d otherVMIPAddr --dport 22  -j DROP
 
-
-# Let's see what iptable rules are in place
-# for the filter table
+# view the rules
 iptables -L -n -v --line-numbers
-
 
 # test
 ssh otherVMIPAddr
 # test
 ssh punetid@64.59.225.81 # zeus 
 
-
 # Flush all the newly added rules
-
 iptables -F OUTPUT
 
 
@@ -102,8 +100,9 @@ telnet 127.0.0.1 8008
 
 
 # application based filtering
-iptables -A OUTPUT -p tcp --sport 22 -m cgroup ! --path system.slice/sshd.service -j LOG --log-prefix "DROP from port 22" --log-tcp-sequence --log-level 7
+# does this work?
 
+iptables -A OUTPUT -p tcp --sport 22 -m cgroup ! --path system.slice/sshd.service -j LOG --log-prefix "DROP from port 22" --log-tcp-sequence --log-level 7
 iptables -A OUTPUT -p tcp --sport 22 -m cgroup ! --path system.slice/sshd.service -j DROP
 
 
@@ -121,15 +120,16 @@ iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 2222 -j REDIRECT --to-port 
 
 
 # In other VM
-ssh punetid@localVM -p 2222
+ssh punetid@VM_1_IPAddr -p 2222
 
-# Let's see what is going on.
+# Let's see what is going on. Run wireshark in both VMs to see both ends of
+# the packet traffic. (can you find a packet in VM2 that is from port 22 in VM1?)
+
 wireshark
-
 filter: tcp.port==22 || tcp.port==2222
 
 # In other VM
-ssh punetid@localVM -p 2222
+ssh punetid@VM_1_IPAddr -p 2222
 
 # drop that rule
 iptables -t nat -D PREROUTING 1
@@ -177,11 +177,9 @@ ssh punetid@64.59.225.81
 ssh punetid@zeus.cs.pacificu.edu
 dig zeus.cs.pacificu.edu
 
-
+# allow DNS traffic through the firewall
 iptables -A INPUT -p udp -s 0/0 --sport 53  -j ACCEPT
 iptables -A OUTPUT -p udp -d 0/0 --dport 53  -j ACCEPT
-
-
 
 
 # test
