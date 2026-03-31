@@ -1,7 +1,6 @@
 
 # Setup port forwarding in VB to forward host 2222 to guest 2222
 # Setup port forwarding in VB to forward host 36022 to guest 22
-# Setup port forwarding in VB to forward host 36080 to guest 80
 
 ## find IP address in each VM
 ip addr
