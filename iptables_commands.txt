@@ -206,3 +206,10 @@ iptables -P FORWARD ACCEPT
 
 ## Why can you not use the DNS name (zeus.cs.pacificu.edu) in the iptables command?
 
+
+## Reset iptables back it is original state.
+## Use the uncomplicated firewall (ufw) in Ubuntu to write rules in VM1 that:
+### will block all incoming connections from VM2.
+### will block all outgoing connections from VM1 to zeus. (should block http/https/ssh).
+
+https://ubuntu.com/server/docs/how-to/security/firewalls/#ufw-uncomplicated-firewall
