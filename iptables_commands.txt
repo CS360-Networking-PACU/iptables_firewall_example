@@ -148,9 +148,6 @@ ssh punetid@64.59.225.81 -p 2223 # zeus
 # Delete that rule
 iptables -t nat -D OUTPUT 1
 
-
-
-
 # simple firewall to ONLY allow SSH in and out
 # adapted from:
 # https://www.cyberciti.biz/tips/linux-iptables-4-block-all-incoming-traffic-but-allow-ssh.html
@@ -194,3 +191,18 @@ iptables -F
 iptables -P INPUT ACCEPT
 iptables -P OUTPUT ACCEPT
 iptables -P FORWARD ACCEPT
+
+# Tasks
+
+## rewrite all packets going to VM2 port 22 to go to Zeus port 22.
+### Test this by running ssh punetid@VM2.
+### Does that work? What errors do you run into?
+
+## Delete that rule
+
+## rewrite all packets going to VM2 to go to Zeus.
+### test by opening http://VM2_IPAddress in firefox
+### test by ssh punetid@vm2
+
+## Why can you not use the DNS name (zeus.cs.pacificu.edu) in the iptables command?
+
